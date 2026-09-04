@@ -488,6 +488,7 @@
       const pronunciationText = document.getElementById('pronunciationText');
 
       try {
+        // Translation API
         const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=bn&dt=t&q=${encodeURIComponent(text)}`);
         const data = await res.json();
         
@@ -499,51 +500,41 @@
         }
 
         banglaText.innerText = translated || "Translation unavailable";
-        pronunciationText.innerText = getAccurateBanglaPronunciation(text);
+
+        // Accurate English to Bangla Transliteration API
+        const words = text.trim().split(/\s+/);
+        const transliteratedWords = await Promise.all(words.map(async (word) => {
+          const cleanWord = word.replace(/[^\w]/g, '');
+          if (!cleanWord) return word;
+
+          try {
+            const apiRes = await fetch(`https://inputtools.google.com/request?text=${encodeURIComponent(cleanWord)}&itc=bn-t-i0-und&num=1`);
+            const apiData = await apiRes.json();
+            
+            if (apiData && apiData[1] && apiData[1][0] && apiData[1][0][1] && apiData[1][0][1][0]) {
+              return apiData[1][0][1][0];
+            }
+          } catch (e) {
+            console.error("Transliteration Error:", e);
+          }
+          return getFallbackPronunciation(cleanWord);
+        }));
+
+        pronunciationText.innerText = transliteratedWords.join(' ');
 
       } catch (err) {
         console.error(err);
         banglaText.innerText = "Error in translation";
-        pronunciationText.innerText = getAccurateBanglaPronunciation(text);
+        pronunciationText.innerText = "...";
       }
     }
 
-    function getAccurateBanglaPronunciation(text) {
+    function getFallbackPronunciation(word) {
       const dictionary = {
         "my": "মাই", "parents": "প্যারেন্টস", "as": "অ্যাজ", "well": "ওয়েল",
-        "i": "আই", "was": "ওয়াজ", "present": "প্রেজেন্ট", "there": "দেয়ার",
-        "the": "দ্যা", "a": "এ", "an": "অ্যান", "is": "ইজ", "are": "আর",
-        "am": "অ্যাম", "were": "ওয়্যার", "has": "হ্যাজ", "have": "হ্যাভ",
-        "had": "হ্যাড", "you": "ইউ", "he": "হি", "she": "শি", "we": "উই",
-        "they": "দে", "this": "দিস", "that": "দ্যাট", "what": "হোয়াট",
-        "where": "হোয়ার", "when": "হোয়েন", "why": "হোয়াই", "how": "হাউ"
+        "i": "আই", "was": "ওয়াজ", "present": "প্রেজেন্ট", "there": "দেয়ার"
       };
-
-      const words = text.toLowerCase().match(/\b\w+\b/g);
-      if (!words) return "...";
-
-      return words.map(word => {
-        if (dictionary[word]) {
-          return dictionary[word];
-        }
-        return phoneticFallback(word);
-      }).join(' ');
-    }
-
-    function phoneticFallback(word) {
-      const map = {
-        'sh': 'শ', 'ch': 'চ', 'th': 'থ', 'ph': 'ফ', 'gh': 'ঘ', 'kh': 'খ', 'dh': 'ধ',
-        'a': 'অ্যা', 'e': 'ই', 'i': 'আই', 'o': 'ও', 'u': 'আ', 'b': 'ব', 'c': 'ক', 'd': 'ড',
-        'f': 'ফ', 'g': 'গ', 'h': 'হ', 'j': 'জ', 'k': 'ক', 'l': 'ল', 'm': 'ম', 'n': 'ন',
-        'p': 'প', 'q': 'ক', 'r': 'র', 's': 'স', 't': 'ট', 'v': 'ভ', 'w': 'ওয়', 'x': 'ক্স',
-        'y': 'ওয়াই', 'z': 'জ'
-      };
-
-      let str = word;
-      for (let key in map) {
-        str = str.replaceAll(key, map[key]);
-      }
-      return str;
+      return dictionary[word.toLowerCase()] || word;
     }
   </script>
 
