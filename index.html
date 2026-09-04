@@ -228,7 +228,7 @@
 
   <div class="header">
     <h1>Smart Translator & Grammar AI</h1>
-    <p>Voice Input • Advanced Grammar Check • Speed Control • Accurate Pronunciation</p>
+    <p>Continuous Voice Input • Auto Translation • Speed Control • Accurate Pronunciation</p>
   </div>
 
   <div class="translator-card">
@@ -298,6 +298,8 @@
     const inputText = document.getElementById('inputText');
     const status = document.getElementById('status');
     let recognition;
+    let isListeningManually = false;
+    let silenceTimer;
     let latestCorrection = "";
 
     function updateSpeedLabel(val) {
@@ -309,39 +311,47 @@
       
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.interimResults = true;
         recognition.lang = 'en-US';
 
         recognition.onstart = function() {
           micBtn.classList.add('recording');
           status.style.color = '#38bdf8';
-          status.innerText = "Listening... Speak into your mic.";
+          status.innerText = "Listening... Speak continuously until you click the mic button again.";
         };
 
         recognition.onresult = function(event) {
           let currentTranscript = '';
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            currentTranscript += event.results[i][0].transcript;
+          for (let i = 0; i < event.results.length; ++i) {
+            currentTranscript += event.results[i][0].transcript + ' ';
           }
-          inputText.value = currentTranscript;
-          if (event.results[0].isFinal) {
-            processText();
-          }
+          inputText.value = currentTranscript.trim();
+
+          clearTimeout(silenceTimer);
+          silenceTimer = setTimeout(() => {
+            if (inputText.value.trim()) {
+              processText();
+            }
+          }, 1200);
         };
 
         recognition.onerror = function(event) {
-          micBtn.classList.remove('recording');
-          status.style.color = '#f87171';
-          if(event.error === 'not-allowed') {
+          if (event.error === 'not-allowed') {
+            isListeningManually = false;
+            micBtn.classList.remove('recording');
+            status.style.color = '#f87171';
             status.innerText = "Microphone blocked. Allow mic permission in browser settings.";
-          } else {
-            status.innerText = "Voice input stopped.";
           }
         };
 
         recognition.onend = function() {
-          micBtn.classList.remove('recording');
+          if (isListeningManually) {
+            recognition.start();
+          } else {
+            micBtn.classList.remove('recording');
+            status.innerText = "";
+          }
         };
       }
     }
@@ -355,16 +365,30 @@
         return;
       }
 
-      try {
-        if (micBtn.classList.contains('recording')) {
-          recognition.stop();
-        } else {
-          recognition.start();
-        }
-      } catch (e) {
+      if (isListeningManually) {
+        isListeningManually = false;
         recognition.stop();
+        clearTimeout(silenceTimer);
+        micBtn.classList.remove('recording');
+        status.innerText = "Voice input stopped.";
+        if (inputText.value.trim()) {
+          processText();
+        }
+      } else {
+        isListeningManually = true;
+        inputText.value = "";
+        recognition.start();
       }
     }
+
+    inputText.addEventListener('input', function() {
+      clearTimeout(silenceTimer);
+      silenceTimer = setTimeout(() => {
+        if (inputText.value.trim()) {
+          processText();
+        }
+      }, 1000);
+    });
 
     function speakEnglish() {
       const text = inputText.value.trim();
@@ -398,16 +422,11 @@
       const text = inputText.value.trim();
       if (!text) return;
 
-      status.style.color = '#38bdf8';
-      status.innerText = "Processing...";
-
       try {
         await checkGrammar(text);
         await translateAndPronounce(text);
-        status.innerText = "";
       } catch (err) {
         console.error(err);
-        status.innerText = "Error processing translation.";
       }
     }
 
@@ -489,7 +508,6 @@
       }
     }
 
-    // Accurate English to Bangla Pronunciation Generator
     function getAccurateBanglaPronunciation(text) {
       const dictionary = {
         "my": "মাই", "parents": "প্যারেন্টস", "as": "অ্যাজ", "well": "ওয়েল",
